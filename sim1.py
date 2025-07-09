@@ -19,21 +19,23 @@ def simulate_beamline(voltages, L=100e-3, W=10e-3, N_x=100, N_y=50, k=1e-9):
     boundary_shape = Rectangle(x_left=-L/2, x_right=L/2, y_bottom=-W/2, y_top=W/2)
     mirror = S4NumericalMeshMirror(name="bimorph", boundary_shape=boundary_shape, xx=xx, yy=yy, zz=zz)
     coordinates = ElementCoordinates(p=20000e-3, q=1000e-3, angle_radial=88.0, angle_azimuthal=0.0)
-    element = S4NumericalMeshMirrorElement(optical_element=mirror, coordinates=coordinates, movements=S4BeamlineElementMovements())
-    source = SourceGaussian.initialize_from_keywords(nrays=10000, sigmaX=1e-3, sigmaZ=1e-3)
+    source =SourceGaussian.initialize_from_keywords(nrays=10000, sigmaX=1e-3, sigmaZ=1e-3)
     beam = source.get_beam()
-    print(beam.get_intensity())
-    output_beam, _ = element.trace_beam(input_beam=beam)
-    print("DEBUG")
+    element = S4NumericalMeshMirrorElement(
+        optical_element=mirror,
+        coordinates=coordinates,
+        movements=S4BeamlineElementMovements(),
+        input_beam=beam
+    )
+    print("DEBUG: ", element.get_coordinates().p())
+    output_beam, _ = element.trace_beam()
     good = output_beam.get_good_rays()
-    print(good)
     x = output_beam.get_column(1, good)
     y = output_beam.get_column(3, good)
     xbins = np.linspace(min(x), max(x), 101)
     ybins = np.linspace(min(y), max(y), 101)
     image, _, _ = np.histogram2d(x, y, bins=(xbins, ybins))
     return image
-
 
 if __name__ == "__main__":
     voltages = np.array([0, 50, -50, 100, -100, 50, -50, 0])
