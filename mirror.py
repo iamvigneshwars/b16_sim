@@ -5,6 +5,7 @@ from shadow4.sources.source_geometrical.source_gaussian import SourceGaussian
 from syned.beamline.shape import  Ellipse
 from shadow4.beamline.optical_elements.mirrors.s4_conic_mirror import S4ConicMirror, S4ConicMirrorElement
 from shadow4.beamline.optical_elements.absorbers.s4_screen import S4Screen, S4ScreenElement
+from shadow4.beamline.optical_elements.mirrors.s4_ellipsoid_mirror import S4EllipsoidMirror, S4EllipsoidMirrorElement
 
 def example_branch_1():
     source = SourceGaussian(nrays=500000,
@@ -29,8 +30,15 @@ def example_branch_1():
                               input_beam=beam0)
 
 
+    mirror2 = S4EllipsoidMirrorElement(optical_element=S4EllipsoidMirror(name="M1",
+                                                               boundary_shape=boundary_shape,
+                                                               p_focus=10.0, # distance from source to the center of the mirror
+                                                               q_focus=6.0, # distance from the center of mirror to the image plane 
+                                                               grazing_angle=numpy.radians(1.2)),
+                                     coordinates=coordinates_syned,
+                                     input_beam=beam0)
     
-    beam1, _ = mirror1.trace_beam()
+    beam1, _ = mirror2.trace_beam()
 
     s1 = S4ScreenElement(optical_element=S4Screen(),
                          coordinates=ElementCoordinates(p=0.0, q=1.0, angle_radial=0.0),
