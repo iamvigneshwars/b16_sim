@@ -7,7 +7,7 @@ from shadow4.beamline.optical_elements.mirrors.s4_conic_mirror import S4ConicMir
 from shadow4.beamline.optical_elements.absorbers.s4_screen import S4Screen, S4ScreenElement
 
 def example_branch_1():
-    source = SourceGaussian(nrays=550000,
+    source = SourceGaussian(nrays=500000,
                  sigmaX=0.0,
                  sigmaY=0.0,
                  sigmaZ=0.0,
@@ -17,7 +17,7 @@ def example_branch_1():
     beam0.generate_source(source)
     print(beam0.info())
 
-    boundary_shape = Ellipse(a_axis_min=0, a_axis_max=1e-05, b_axis_min=-0.0005, b_axis_max=0)
+    boundary_shape = Ellipse(a_axis_min=-0.000005, a_axis_max=0.000005, b_axis_min=-0.01, b_axis_max=0.01)
     coordinates_syned = ElementCoordinates(p = 10.0,
                                            q = 6.0,
                                            angle_radial = numpy.radians(88.8))
@@ -42,13 +42,12 @@ def example_branch_1():
     x = rays[:, 0]
     z = rays[:, 2]
     
-    image_data, _, _ = numpy.histogram2d(x, z, bins=201)
+    image_data, _, _ = numpy.histogram2d(x, z, bins=201, range=[[-100e-6, 100e-6], [-100e-6, 100e-6]])
     plt.imshow(image_data, interpolation='nearest', origin='lower',)
     plt.show()
 
 if __name__ == "__main__":
 
     from matplotlib import pyplot as plt
-
     example_branch_1()
 
