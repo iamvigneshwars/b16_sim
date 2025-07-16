@@ -9,26 +9,24 @@ from scipy.interpolate import interp1d
 from shadow4.sources.source_geometrical.source_gaussian import SourceGaussian
 
 def simulate_beamline(voltages=None, L=100e-3, W=10e-3, N_x=100, N_y=50, k=1e-9):
-    # Create 1D coordinate arrays
-    xx = np.linspace(0, L, N_x)
+    xx = np.linspace(-L/2, L/2, N_x)
     yy = np.linspace(-W/2, W/2, N_y)
     
-    # Calculate parabolic surface for focusing
-    p = 20.0  # source-to-mirror distance (m)
-    q = 1.0   # mirror-to-detector distance (m)
-    theta = np.radians(2.0)  # grazing angle
-    f = 2 / (1/p + 1/q) / np.sin(theta)  # focal length
-    z_ideal = xx**2 / (4 * f * np.sin(theta))  # parabolic profile
+    p = 20.0
+    q = 1.0
+    theta = np.radians(2.0)
+    f = 2 / (1/p + 1/q) / np.sin(theta)
+    z_ideal = xx**2 / (4 * f * np.sin(theta))
     
     # If voltages provided, scale to match ideal profile
     if voltages is not None:
         n_act = len(voltages)
-        x_act = np.linspace(0, L, n_act+2)[1:-1]
+        x_act = np.linspace(-L/2, L/2, n_act)
         z_act = k * voltages
         z_func = interp1d(x_act, z_act, kind='cubic', fill_value=0.0, bounds_error=False)
         z_xx = z_func(xx)
     else:
-        z_xx = z_ideal  # Use ideal parabolic profile
+        z_xx = z_ideal
     
     # Create 2D height array
     zz = np.zeros((N_x, N_y))
@@ -37,13 +35,13 @@ def simulate_beamline(voltages=None, L=100e-3, W=10e-3, N_x=100, N_y=50, k=1e-9)
     zz = zz.T
     
     # Define mirror and beamline elements
-    boundary_shape = Rectangle(x_left=0, x_right=L, y_bottom=-W/2, y_top=W/2)
+    boundary_shape = Rectangle(x_left=-L/2, x_right=L/2, y_bottom=-W/2, y_top=W/2)  # Centered around zero
     mirror = S4NumericalMeshMirror(name="bimorph", boundary_shape=boundary_shape, xx=xx, yy=yy, zz=zz)
     coordinates = ElementCoordinates(p=20000e-3, q=1000e-3, angle_radial=88.0, angle_azimuthal=0.0)
     
     # Optimized Gaussian source
     source = SourceGaussian.initialize_from_keywords(
-        nrays=10000,
+        nrays=1000000,
         sigmaX=50e-6, sigmaZ=50e-6,  # 50 μm source size
         sigmaXprime=50e-6, sigmaZprime=50e-6  # 50 μrad divergence
     )
