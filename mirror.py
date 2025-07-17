@@ -3,9 +3,7 @@ from syned.beamline.element_coordinates import ElementCoordinates
 from shadow4.beam.s4_beam import S4Beam
 from shadow4.sources.source_geometrical.source_gaussian import SourceGaussian
 from syned.beamline.shape import Ellipse
-from shadow4.beamline.optical_elements.mirrors.s4_conic_mirror import S4ConicMirror, S4ConicMirrorElement
 from shadow4.beamline.optical_elements.absorbers.s4_screen import S4Screen, S4ScreenElement
-from shadow4.beamline.optical_elements.mirrors.s4_ellipsoid_mirror import S4EllipsoidMirror, S4EllipsoidMirrorElement
 from shadow4.beamline.optical_elements.mirrors.s4_numerical_mesh_mirror import S4NumericalMeshMirror
 from shadow4.beamline.optical_elements.mirrors.s4_additional_numerical_mesh_mirror import S4AdditionalNumericalMeshMirror
 from shadow4.beamline.optical_elements.mirrors.s4_additional_numerical_mesh_mirror import S4AdditionalNumericalMeshMirrorElement
@@ -17,7 +15,7 @@ def calculate_bimorph_deformation(voltages, grid, alpha=1.274):
     
     Parameters:
     voltages (list or array): 8 voltages in [-5, 5] V.
-    grid (np.ndarray): 1D array of coordinates (m), now along X for horizontal focus.
+    grid (np.ndarray): 1D array of coordinates (m), along X for horizontal focus.
     alpha (float): Sensitivity in m⁻¹/V (adjusted for sagittal curvature within voltage bounds).
     
     Returns:
@@ -33,22 +31,18 @@ def calculate_bimorph_deformation(voltages, grid, alpha=1.274):
         start = i * segment_len
         end = min((i + 1) * segment_len, n)
         curvature[start:end] = alpha * v
-    # Integrate curvature to slope
     slope = np.cumsum(curvature) * dg
-    # Detrend slope (zero at ends for fixed boundaries)
     slope -= np.linspace(slope[0], slope[-1], n)
-    # Integrate slope to height
     z = np.cumsum(slope) * dg
-    # Normalize to zero at center
     z -= z[n // 2]
     return z
 
 def simulate(voltages=[0.0] * 8):
-    boundary_shape = Ellipse(a_axis_min=-0.000005, a_axis_max=0.000005, b_axis_min=-0.01, b_axis_max=0.01)
+    boundary_shape = Ellipse(a_axis_min=-0.0000029, a_axis_max=0.0000029, b_axis_min=-0.01, b_axis_max=0.01)
     source = SourceGaussian(nrays=500000,
-                            sigmaX=0.0,
-                            sigmaY=0.0,
-                            sigmaZ=0.0,
+                            sigmaX=0e-4,
+                            sigmaY=0e-4,
+                            sigmaZ=0e-4,
                             sigmaXprime=1e-6,
                             sigmaZprime=1e-6)
     beam0 = S4Beam()
@@ -116,7 +110,7 @@ if __name__ == "__main__":
     voltages_set = np.random.uniform(-5, 5, size=(500, 8))
 
     plt.ion()
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(14, 10))
     im = None
 
     for i, voltages in enumerate(voltages_set):
