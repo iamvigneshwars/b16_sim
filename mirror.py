@@ -38,7 +38,7 @@ def calculate_bimorph_deformation(voltages, grid, alpha=1.274):
     return z
 
 def simulate(voltages=[0.0] * 8):
-    boundary_shape = Ellipse(a_axis_min=-0.0000029, a_axis_max=0.0000029, b_axis_min=-0.01, b_axis_max=0.01)
+    boundary_shape = Ellipse(a_axis_min=-0.0000039, a_axis_max=0.0000039, b_axis_min=-0.01, b_axis_max=0.01)
     source = SourceGaussian(nrays=500000,
                             sigmaX=0e-4,
                             sigmaY=0e-4,
@@ -47,7 +47,7 @@ def simulate(voltages=[0.0] * 8):
                             sigmaZprime=1e-6)
     beam0 = S4Beam()
     beam0.generate_source(source)
-    print(beam0.info())
+    # print(beam0.info())
 
     xmin, xmax = -5e-6, 5e-6  # Short axis (X, for sagittal deformation)
     ymin, ymax = -0.01, 0.01  # Long axis (Y)
@@ -102,7 +102,7 @@ def simulate(voltages=[0.0] * 8):
     x = rays[:, 0]
     z = rays[:, 2]
     
-    image_data, _, _ = np.histogram2d(x, z, bins=201, range=[[-100e-6, 100e-6], [-100e-6, 100e-6]])
+    image_data, _, _ = np.histogram2d(x, z, bins=[400, 1300], range=[[-100e-6, 100e-6], [-100e-6, 100e-6]])
     return image_data
 
 if __name__ == "__main__":
@@ -110,7 +110,7 @@ if __name__ == "__main__":
     voltages_set = np.random.uniform(-5, 5, size=(500, 8))
 
     plt.ion()
-    fig, ax = plt.subplots(figsize=(14, 10))
+    fig, ax = plt.subplots(figsize=(14, 8))
     im = None
 
     for i, voltages in enumerate(voltages_set):
