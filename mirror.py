@@ -2,75 +2,72 @@ import numpy as np
 from syned.beamline.element_coordinates import ElementCoordinates
 from shadow4.beam.s4_beam import S4Beam
 from shadow4.sources.source_geometrical.source_gaussian import SourceGaussian
-from syned.beamline.shape import  Ellipse
+from syned.beamline.shape import Ellipse
 from shadow4.beamline.optical_elements.mirrors.s4_conic_mirror import S4ConicMirror, S4ConicMirrorElement
 from shadow4.beamline.optical_elements.absorbers.s4_screen import S4Screen, S4ScreenElement
 from shadow4.beamline.optical_elements.mirrors.s4_ellipsoid_mirror import S4EllipsoidMirror, S4EllipsoidMirrorElement
 from shadow4.beamline.optical_elements.mirrors.s4_numerical_mesh_mirror import S4NumericalMeshMirror
 from shadow4.beamline.optical_elements.mirrors.s4_additional_numerical_mesh_mirror import S4AdditionalNumericalMeshMirror
 from shadow4.beamline.optical_elements.mirrors.s4_additional_numerical_mesh_mirror import S4AdditionalNumericalMeshMirrorElement
+from shadow4.beamline.optical_elements.mirrors.s4_plane_mirror import S4PlaneMirror
 
-def calculate_bimorph_deformation(voltages, yy, alpha=1e-3):
+def calculate_bimorph_deformation(voltages, grid, alpha=1.274):
     """
-    Compute 1D height deformation z(y) from 8 voltages.
+    Compute 1D height deformation z along the provided grid from 8 voltages.
     
     Parameters:
-    voltages (list or array): 8 voltages in [-300, 300] V.
-    yy (np.ndarray): 1D array of Y-coordinates (m).
-    alpha (float): Sensitivity in m⁻¹/V (adjust per mirror specs).
+    voltages (list or array): 8 voltages in [-5, 5] V.
+    grid (np.ndarray): 1D array of coordinates (m), now along X for horizontal focus.
+    alpha (float): Sensitivity in m⁻¹/V (adjusted for sagittal curvature within voltage bounds).
     
     Returns:
     np.ndarray: 1D array of z heights (m).
     """
     if len(voltages) != 8:
         raise ValueError("Exactly 8 voltages required.")
-    ny = len(yy)
-    dy = yy[1] - yy[0]
-    segment_len = ny // 8
-    curvature = np.zeros(ny)
+    n = len(grid)
+    dg = grid[1] - grid[0]
+    segment_len = n // 8
+    curvature = np.zeros(n)
     for i, v in enumerate(voltages):
         start = i * segment_len
-        end = min((i + 1) * segment_len, ny)
+        end = min((i + 1) * segment_len, n)
         curvature[start:end] = alpha * v
     # Integrate curvature to slope
-    slope = np.cumsum(curvature) * dy
-    # Detrend slope (e.g., zero at ends for fixed boundaries)
-    slope -= np.linspace(slope[0], slope[-1], ny)
+    slope = np.cumsum(curvature) * dg
+    # Detrend slope (zero at ends for fixed boundaries)
+    slope -= np.linspace(slope[0], slope[-1], n)
     # Integrate slope to height
-    z = np.cumsum(slope) * dy
+    z = np.cumsum(slope) * dg
     # Normalize to zero at center
-    z -= z[ny // 2]
+    z -= z[n // 2]
     return z
 
 def simulate(voltages=[0.0] * 8):
-
     boundary_shape = Ellipse(a_axis_min=-0.000005, a_axis_max=0.000005, b_axis_min=-0.01, b_axis_max=0.01)
     source = SourceGaussian(nrays=500000,
-                 sigmaX=0.0,
-                 sigmaY=0.0,
-                 sigmaZ=0.0,
-                 sigmaXprime=1e-6,
-                 sigmaZprime=1e-6,)
+                            sigmaX=0.0,
+                            sigmaY=0.0,
+                            sigmaZ=0.0,
+                            sigmaXprime=1e-6,
+                            sigmaZprime=1e-6)
     beam0 = S4Beam()
     beam0.generate_source(source)
     print(beam0.info())
 
-    xmin, xmax = -5e-6, 5e-6  # From your boundary_shape a_axis
-    ymin, ymax = -0.01, 0.01  # From b_axis
+    xmin, xmax = -5e-6, 5e-6  # Short axis (X, for sagittal deformation)
+    ymin, ymax = -0.01, 0.01  # Long axis (Y)
     nx, ny = 51, 201
     xx = np.linspace(xmin, xmax, nx)
     yy = np.linspace(ymin, ymax, ny)
 
-    z_deform = calculate_bimorph_deformation(voltages, yy, alpha=1e-3)
+    z_deform = calculate_bimorph_deformation(voltages, xx, alpha=1.274)
 
-    zz = np.tile(z_deform[:, np.newaxis], (1, nx))
+    zz = np.tile(z_deform[np.newaxis, :], (ny, 1))  # Vary along X, constant along Y
 
-    ideal_mirror = S4EllipsoidMirror(
-        name="Ideal Ellipsoid",
-        boundary_shape=boundary_shape,
-        p_focus=10.0,
-        q_focus=6.0,
-        grazing_angle=np.radians(1.2)
+    ideal_mirror = S4PlaneMirror(
+        name="Plane Base",
+        boundary_shape=boundary_shape
     )
 
     deform_mirror = S4NumericalMeshMirror(
@@ -86,9 +83,9 @@ def simulate(voltages=[0.0] * 8):
         name="Bimorph Mirror"
     )
 
-    coordinates_syned = ElementCoordinates(p = 10.0,
-                                           q = 6.0,
-                                           angle_radial = np.radians(88.8))
+    coordinates_syned = ElementCoordinates(p=10.0,
+                                           q=6.0,
+                                           angle_radial=np.radians(88.8))
 
     mirror_element = S4AdditionalNumericalMeshMirrorElement(
         optical_element=bimorph_mirror,
@@ -98,17 +95,16 @@ def simulate(voltages=[0.0] * 8):
 
     beam1, _ = mirror_element.trace_beam()
 
-
     s1 = S4ScreenElement(optical_element=S4Screen(),
-                         coordinates=ElementCoordinates(p=0.0, q=1.0, angle_radial=0.0),
+                         coordinates=ElementCoordinates(p=0.0, q=6.0, angle_radial=0.0),
                          input_beam=beam1)
 
     beam_on_source, _ = s1.trace_beam()
 
     rays = beam_on_source.rays_good
-    vertical_size = np.std(rays[:, 2]) * 1e6  # Vertical RMS in μm (adjust column if needed)
-    intensity_fraction = len(rays) / 500000.0
-    print(f"Vertical size: {vertical_size:.2f} μm, Intensity fraction: {intensity_fraction:.4f}")
+    horizontal_size = np.std(rays[:, 0]) * 1e6 if len(rays) > 0 else 0.0  # Horizontal RMS in μm
+    intensity_fraction = len(rays) / 10000.0
+    print(f"Horizontal size: {horizontal_size:.2f} μm, Intensity fraction: {intensity_fraction:.4f}")
     x = rays[:, 0]
     z = rays[:, 2]
     
@@ -116,9 +112,8 @@ def simulate(voltages=[0.0] * 8):
     return image_data
 
 if __name__ == "__main__":
-
     from matplotlib import pyplot as plt
-    voltages_set = np.random.uniform(-300, 300, size=(500, 8))
+    voltages_set = np.random.uniform(-5, 5, size=(500, 8))
 
     plt.ion()
     fig, ax = plt.subplots()
