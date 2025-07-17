@@ -1,86 +1,94 @@
 import numpy as np
 import matplotlib.pyplot as plt
-
-# Shadow4 and Syned imports
 from shadow4.beam.s4_beam import S4Beam
-from shadow4.sources.source_geometrical.source_geometrical import SourceGeometrical
-from shadow4.beamline.optical_elements.mirrors.s4_additional_numerical_mesh_mirror import S4AdditionalNumericalMeshMirror
-from shadow4.beamline.optical_elements.mirrors.s4_numerical_mesh_mirror import S4NumericalMeshMirror
-from shadow4.beamline.optical_elements.mirrors.s4_plane_mirror import S4PlaneMirror
-from shadow4.beamline.s4_beamline import S4Beamline
-from shadow4.beamline.s4_beamline_element import S4BeamlineElement
+from shadow4.beamline.optical_elements.mirrors.s4_numerical_mesh_mirror import S4NumericalMeshMirror, S4NumericalMeshMirrorElement
+from shadow4.beamline.s4_beamline_element_movements import S4BeamlineElementMovements
 from syned.beamline.element_coordinates import ElementCoordinates
+from syned.beamline.shape import Rectangle
+from scipy.interpolate import interp1d
+from shadow4.sources.source_geometrical.source_gaussian import SourceGaussian
 
-def run_beamline_simulation(voltages):
-    """
-    This function simulates a simple beamline with a bimorph mirror.
-    ...
-    """
-    if voltages.shape != (8,) or np.any(voltages < -300) or np.any(voltages > 300):
-        raise ValueError("Voltages must be a 1D NumPy array of 8 values between -300V and 300V.")
-
-    # 1. Define the Light Source
-    light_source = SourceGeometrical()
-    light_source.set_energy_distribution_singleline(value=1000, unit='eV')
-    light_source.set_spatial_type_gaussian(sigma_h=1e-4, sigma_v=1e-4)
-    light_source.set_angular_distribution_gaussian(sigdix=1e-4, sigdiz=1e-4)
-    light_source.set_nrays(100000)
-
-    # 2. Define the Bimorph Mirror
-    base_mirror = S4PlaneMirror(name="Base Plane Mirror", f_reflec=1, f_refl=0)
-
-    x = np.linspace(-0.05, 0.05, 100)
-    y = np.linspace(-0.2, 0.2, 200)
-    X, Y = np.meshgrid(x, y)
+def simulate_beamline(voltages=None, L=100e-3, W=10e-3, N_x=100, N_y=50, k=1e-9):
+    xx = np.linspace(-L/2, L/2, N_x)
+    yy = np.linspace(-W/2, W/2, N_y)
     
-    z = np.zeros_like(X)
-    for i in range(8):
-        z += voltages[i] * 1e-9 * np.sin((i + 1) * np.pi * (Y / 0.2))
-
-    mesh_object = S4NumericalMeshMirror(xx=X.flatten(), yy=Y.flatten(), zz=z.flatten())
-    mirror = S4AdditionalNumericalMeshMirror(name="Bimorph Mirror", ideal_mirror=base_mirror, numerical_mesh_mirror=mesh_object)
-
-    # 3. Define the Beamline
-    beamline = S4Beamline()
-    beamline.set_light_source(light_source)
-    coordinates = ElementCoordinates(p=10.0, q=10.0, angle_radial=np.deg2rad(89.8), angle_azimuthal=0.0)
+    p = 20.0
+    q = 1.0
+    theta = np.radians(2.0)
+    f = 2 / (1/p + 1/q) / np.sin(theta)
+    z_ideal = xx**2 / (4 * f * np.sin(theta))
     
-    # We append the optical element and coordinates. The beamline now serves as a simple container for our components.
-    beamline.append_beamline_element(S4BeamlineElement(optical_element=mirror, coordinates=coordinates))
+    # If voltages provided, scale to match ideal profile
+    if voltages is not None:
+        n_act = len(voltages)
+        x_act = np.linspace(-L/2, L/2, n_act)
+        z_act = k * voltages
+        z_func = interp1d(x_act, z_act, kind='cubic', fill_value=0.0, bounds_error=False)
+        z_xx = z_func(xx)
+    else:
+        z_xx = z_ideal
+    
+    # Create 2D height array
+    zz = np.zeros((N_x, N_y))
+    for i in range(N_x):
+        zz[i, :] = z_xx[i]
+    zz = zz.T
+    
+    # Define mirror and beamline elements
+    boundary_shape = Rectangle(x_left=-L/2, x_right=L/2, y_bottom=-W/2, y_top=W/2)  # Centered around zero
+    mirror = S4NumericalMeshMirror(name="bimorph", boundary_shape=boundary_shape, xx=xx, yy=yy, zz=zz)
+    coordinates = ElementCoordinates(p=20000e-3, q=1000e-3, angle_radial=88.0, angle_azimuthal=0.0)
+    
+    # Optimized Gaussian source
+    source = SourceGaussian.initialize_from_keywords(
+        nrays=1000000,
+        sigmaX=50e-6, sigmaZ=50e-6,  # 50 μm source size
+        sigmaXprime=50e-6, sigmaZprime=50e-6  # 50 μrad divergence
+    )
+    beam = source.get_beam()
+    
+    # Create optical element
+    element = S4NumericalMeshMirrorElement(
+        optical_element=mirror,
+        coordinates=coordinates,
+        movements=S4BeamlineElementMovements(),
+        input_beam=beam
+    )
+    
+    # Trace the beam
+    output_beam, _ = element.trace_beam()
+    
+    # Extract good rays and intensity
+    good_rays = output_beam.rays_good
+    x = good_rays[:, 0]  # X (column 1)
+    z = good_rays[:, 2]  # Z (column 3)
+    intensity = output_beam.get_column(23, nolost=1)  # Total intensity
+    
+    # Create histogram with intensity weighting
+    xbins = np.linspace(min(x), max(x), 101)
+    zbins = np.linspace(min(z), max(z), 201)  # Finer bins in Z for focus
+    image, _, _ = np.histogram2d(x, z, bins=(xbins, zbins), weights=intensity)
+    
+    return image, xbins, zbins
 
-    # 4. Run the Simulation
-    # ============================ MODIFICATION START ============================
-    # Get the initial beam from the source
-    beam = light_source.get_beam()
-
-    # Loop through the components stored in the beamline object
-    for element_definition in beamline.get_beamline_elements():
-        # Create a new S4BeamlineElement, passing the BEAM to the constructor
-        tracer_element = S4BeamlineElement(
-            optical_element=element_definition.get_optical_element(),
-            coordinates=element_definition.get_coordinates(),
-            input_beam=beam
-        )
-        
-        # Call trace_beam() with NO arguments. It uses the input_beam provided in the constructor.
-        beam, _ = tracer_element.trace_beam()
-
-    final_beam = beam
-    # ============================= MODIFICATION END =============================
-
-    # 5. Get the Detector Image
-    detector_image, _, _ = final_beam.get_histogram(nbins=256)
-
-    return detector_image
-
-if __name__ == '__main__':
-    voltages = np.array([100, -50, 200, -150, 50, -250, 300, -100])
-    detector_image = run_beamline_simulation(voltages)
-
+def visualize_image(image, xbins, zbins):
     plt.figure(figsize=(8, 6))
-    plt.imshow(detector_image, cmap='viridis', origin='lower')
-    plt.title("Simulated Detector Image")
-    plt.xlabel("X [pixels]")
-    plt.ylabel("Y [pixels]")
-    plt.colorbar(label="Intensity")
+    plt.imshow(image.T, origin='lower', extent=[xbins[0], xbins[-1], zbins[0], zbins[-1]],
+               aspect='auto', cmap='viridis')
+    plt.colorbar(label='Intensity')
+    plt.xlabel('X (m)')
+    plt.ylabel('Z (m)')
+    plt.title('Detector Image (Line Focus)')
     plt.show()
+
+if __name__ == "__main__":
+    # Test with ideal parabolic profile (no voltages)
+    image, xbins, zbins = simulate_beamline(voltages=None)
+    print("Simulation completed. Image shape:", image.shape)
+    visualize_image(image, xbins, zbins)
+    
+    # Test with user-defined voltages
+    voltages = np.array([0, 50, -50, 100, -100, 50, -50, 0])
+    image, xbins, zbins = simulate_beamline(voltages)
+    print("Simulation completed with voltages. Image shape:", image.shape)
+    visualize_image(image, xbins, zbins)
