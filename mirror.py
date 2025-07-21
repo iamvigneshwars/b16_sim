@@ -102,7 +102,7 @@ def simulate(voltages=[0.0] * 8):
     x = rays[:, 0]
     z = rays[:, 2]
     
-    image_data, _, _ = np.histogram2d(x, z, bins=[400, 1300], range=[[-100e-6, 100e-6], [-100e-6, 100e-6]])
+    image_data, _, _ = np.histogram2d(x, z, bins=[400, 3100], range=[[-100e-6, 100e-6], [-100e-6, 100e-6]])
     return image_data
 
 if __name__ == "__main__":
