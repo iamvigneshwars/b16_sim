@@ -38,7 +38,7 @@ def calculate_bimorph_deformation(voltages, grid, alpha=1.274):
     return z
 
 def simulate(voltages=[0.0] * 8):
-    boundary_shape = Ellipse(a_axis_min=-0.0000039, a_axis_max=0.0000039, b_axis_min=-0.01, b_axis_max=0.01)
+    boundary_shape = Ellipse(a_axis_min=-0.0000019, a_axis_max=0.0000019, b_axis_min=-0.01, b_axis_max=0.01)
     source = SourceGaussian(nrays=500000,
                             sigmaX=0e-4,
                             sigmaY=0e-4,
@@ -116,7 +116,7 @@ if __name__ == "__main__":
     for i, voltages in enumerate(voltages_set):
         image = simulate(voltages)
         if im is None:
-            im = ax.imshow(image, cmap='gray', aspect='auto')
+            im = ax.imshow(image, cmap='inferno', aspect='auto')
             plt.colorbar(im, ax=ax, label='Intensity')
             plt.xlabel('Horizontal Pixel')
             plt.ylabel('Vertical Pixel')
