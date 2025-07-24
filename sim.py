@@ -17,9 +17,7 @@ if __name__ == "__main__":
         fig, ax = plt.subplots(figsize=(14, 8))
         im = ax.imshow(image, cmap='inferno', aspect='auto')
         plt.colorbar(im, ax=ax, label='Intensity')
-        plt.xlabel('Horizontal Pixel')
-        plt.ylabel('Vertical Pixel')
-        ax.set_title(f'Simulated Detector Image\nVoltages: {voltages}')
+        ax.set_title(f'Simulated Detector Image')
         plt.show()
     else:
         voltages_set = np.random.uniform(-5, 5, size=(500, 8))
@@ -32,8 +30,6 @@ if __name__ == "__main__":
             if im is None:
                 im = ax.imshow(image, cmap='inferno', aspect='auto')
                 plt.colorbar(im, ax=ax, label='Intensity')
-                plt.xlabel('Horizontal Pixel')
-                plt.ylabel('Vertical Pixel')
             else:
                 im.set_data(image)
                 im.set_clim(vmin=image.min(), vmax=image.max())
